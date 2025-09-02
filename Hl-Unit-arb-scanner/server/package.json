@@ -1,0 +1,26 @@
+
+{
+  "name": "arb-scanner-server",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p .",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "ccxt": "^4.3.69",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "p-limit": "^5.0.0",
+    "pino": "^9.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  }
+}
