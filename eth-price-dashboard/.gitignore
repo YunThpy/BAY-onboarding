@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.*
+
+# Next.js
+.next/
+out/
+dist/
+.vercel/
+.vite/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.secret
+*.keystore
+*.pem
+*.p12
+*.key
+*.crt
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS & editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Misc
+*.zip
+coverage/
