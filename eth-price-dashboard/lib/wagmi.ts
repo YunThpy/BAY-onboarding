@@ -11,8 +11,8 @@ export const hyperEvm = {
   name: 'Hyperliquid',
   nativeCurrency: { name: 'HYPE', symbol: 'HYPE', decimals: 18 },
   rpcUrls: {
-    default: { http: ['https://rpc.hyperliquid.xyz/evm'] },
-    public: { http: ['https://rpc.hyperliquid.xyz/evm'] },
+    default: { http: ['https://rpc.hyperliquid-testnet.xyz/evm'] },
+    public: { http: ['https://rpc.hyperliquid-testnet.xyz/evm'] },
   },
 } as const;
 

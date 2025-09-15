@@ -53,3 +53,41 @@ pnpm hardhat run scripts/deploy-hl.ts --network hyperevm
 - Consider rate limiting and error masking on server routes.
 - Add slippage controls and preview for the 1inch swap.
 - For production, pin exact dependency versions and add e2e tests.
+
+
+
+ENV 가이드라인
+
+1. 1inch API Key
+ONEINCH_API_KEY=your_1inch_api_key
+
+
+발급 위치: 1inch Developer Portal
+
+무료 tier도 제공 → API 호출 제한(QPS)이 있지만 테스트엔 충분
+
+발급받은 문자열 그대로 넣으면 됨 (예: abcd1234efgh5678)
+
+👉 이 키가 없으면 1inch 가격조회 / 스왑 기능이 동작하지 않음.
+👉 키는 절대 깃허브에 커밋 금지 (.env에만 작성).
+
+
+
+2. Hyperliquid HLBuyer 컨트랙트 주소
+
+NEXT_PUBLIC_HL_BUYER_CONTRACT=0x1234abcd5678ef... (실제 배포 주소)
+
+
+HLBuyer.sol을 Hardhat으로 HyperEVM에 배포하면 로그에 컨트랙트 주소가 출력됨
+
+npx hardhat run scripts/deploy-hl.ts --network hyperevm
+
+
+그때 나온 주소를 .env에 반영
+
+아직 배포 전이면:
+
+NEXT_PUBLIC_HL_BUYER_CONTRACT=0x0000000000000000000000000000000000000000
+
+
+로 둬도 앱은 뜨지만, Hyperliquid 매수 버튼은 작동 안 함
