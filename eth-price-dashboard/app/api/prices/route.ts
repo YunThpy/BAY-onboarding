@@ -12,7 +12,8 @@ const asNum = (v: any) => (v == null ? null : Number(v));
 // 필요하면 .env에 HL_INFO_URL 로 강제 오버라이드 가능
 const HL_INFO =
   process.env.HL_INFO_URL?.trim() ||
-  (process.env.NEXT_PUBLIC_MODE === "TESTNET"
+  (process.env.NEXT_PUBLIC_MODE === "TESTNET" ||
+  process.env.NEXT_PUBLIC_HL_MODE === "TESTNET"
     ? "https://api.hyperliquid-testnet.xyz/info"
     : "https://api.hyperliquid.xyz/info");
 
@@ -85,46 +86,63 @@ export async function GET() {
           }
         })(),
 
-        // Hyperliquid — l2Book → metaAndAssetCtxs(markPx) → allMids 순 폴백
+        // 🔥 Hyperliquid — UETH spot (정식 로직: tokenDetails → spotMetaAndAssetCtxs 폴백)
         (async () => {
-          // 1) l2Book: 최우선 매도호가 사용
           try {
-            const { data } = await http.post(
+            // 환경변수에서 심볼(UETH 권장) 읽기
+            const symbol =
+              process.env.NEXT_PUBLIC_SYMBOL?.trim() || "UETH";
+
+            // 1) spotMeta: tokens에서 대상 토큰 찾기 (index/tokenId 확보)
+            const metaRes = await http.post(
               HL_INFO,
-              { type: "l2Book", coin: "ETH/USDC" },
-              { headers: { "content-type": "application/json" } }
+              { type: "spotMeta" },
+              { headers: { "Content-Type": "application/json" } }
             );
-            const askPx =
-              data?.levels?.asks?.[0]?.px ?? data?.levels?.a?.[0]?.[0] ?? null;
-            if (askPx != null) return asNum(askPx);
+            const tokens = metaRes.data?.tokens ?? [];
+            const universe = metaRes.data?.universe ?? [];
+            const token = tokens.find((t: any) => t?.name === symbol);
+            if (!token) return null;
+
+            // 2-A) 단건: tokenDetails(tokenId)로 바로 가격 (가장 안전/단순)
+            try {
+              const tdRes = await http.post(
+                HL_INFO,
+                { type: "tokenDetails", tokenId: token.tokenId },
+                { headers: { "Content-Type": "application/json" } }
+              );
+              const priceStr = tdRes.data?.markPx ?? tdRes.data?.midPx ?? null;
+              if (priceStr != null) return asNum(priceStr);
+            } catch {
+              // 무시하고 폴백 진행
+            }
+
+            // 2-B) 배치: spotMetaAndAssetCtxs → [meta, ctxs]
+            try {
+              const macRes = await http.post(
+                HL_INFO,
+                { type: "spotMetaAndAssetCtxs" },
+                { headers: { "Content-Type": "application/json" } }
+              );
+              const meta2 = Array.isArray(macRes.data) ? macRes.data[0] : null;
+              const ctxs = Array.isArray(macRes.data) ? macRes.data[1] : null;
+              const uni = meta2?.universe ?? universe;
+
+              // UETH 토큰 index를 포함하는 페어 찾기 (u.tokens.includes(index))
+              const pair = uni?.find(
+                (u: any) => Array.isArray(u?.tokens) && u.tokens.includes(token.index)
+              );
+              if (!pair || !Array.isArray(ctxs) || !ctxs[pair.index]) return null;
+
+              const ctx = ctxs[pair.index];
+              const pxStr = ctx?.markPx ?? ctx?.midPx ?? null;
+              return pxStr != null ? asNum(pxStr) : null;
+            } catch {
+              return null;
+            }
           } catch {
-            // 무시하고 폴백 진행
+            return null;
           }
-          // 2) metaAndAssetCtxs: markPx 사용
-          try {
-            const { data } = await http.post(
-              HL_INFO,
-              { type: "metaAndAssetCtxs" },
-              { headers: { "content-type": "application/json" } }
-            );
-            const eth = data?.assetCtxs?.find((a: any) => a?.name === "ETH");
-            if (eth?.markPx != null) return asNum(eth.markPx);
-          } catch {
-            // ignore
-          }
-          // 3) allMids: ETH mid 사용 (있을 때)
-          try {
-            const { data } = await http.post(
-              HL_INFO,
-              { type: "allMids" },
-              { headers: { "content-type": "application/json" } }
-            );
-            const mid = data?.mids?.ETH ?? data?.mids?.["ETH/USDC"];
-            if (mid != null) return asNum(mid);
-          } catch {
-            // ignore
-          }
-          return null;
         })(),
       ]);
 
