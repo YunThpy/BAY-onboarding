@@ -1,4 +1,14 @@
 "use client";
+// 👇 추가
+import {
+  CORE_WRITER,
+  CORE_WRITER_ABI,
+  buildLimitOrderData,
+  getHLSpotAssetId,
+  getHLBestAsk,
+  to1e8,
+} from "@/lib/hyperliquid";
+import type { Address } from "viem";
 
 import React, { useState } from "react";
 import { useAccount, useChainId, useSwitchChain, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
@@ -90,43 +100,60 @@ async function handleBuyOn1inch() {
     }
   }
 
-  async function handleBuyOnHL() {
-    if (!isConnected) throw new Error("Connect wallet first");
-    if (chainId !== hyperEvm.id) await switchChainAsync?.({ chainId: hyperEvm.id });
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/oneinch/quote?hl=1&amount=${buyAmt}`);
-      const { hl } = await res.json();
-      const contract = process.env.NEXT_PUBLIC_HL_BUYER_CONTRACT || process.env.HL_BUYER_CONTRACT_ADDRESS;
-      if (!contract || contract === "0x0000000000000000000000000000000000000000") {
-        alert("Set HL_BUYER_CONTRACT_ADDRESS in env");
-        return;
-      }
-      const abi = [{
-        "type": "function",
-        "name": "placeIocBuy",
-        "stateMutability": "nonpayable",
-        "inputs": [
-          {"name":"asset","type":"uint32"},
-          {"name":"limitPx","type":"uint64"},
-          {"name":"sz","type":"uint64"},
-          {"name":"tif","type":"uint8"}
-        ],
-        "outputs": []
-      }];
-      await writeContractAsync({
-        address: contract as `0x${string}`,
-        abi,
-        functionName: "placeIocBuy",
-        args: [hl.asset, hl.limitPx, hl.sz, 3],
-        chainId: hyperEvm.id,
-      });
-    } finally {
-      setLoading(false);
-    }
+async function handleBuyOnHL() {
+  if (!isConnected) throw new Error("Connect wallet first");
+  if (chainId !== hyperEvm.id) await switchChainAsync?.({ chainId: hyperEvm.id });
+
+  setLoading(true);
+  try {
+    // 1) UETH/USDC asset id
+    const asset = await getHLSpotAssetId("UETH/USDC");
+
+    // 2) 가격 소스: 카드의 price 우선, 없으면 HL best ask 조회
+    const spotPrice = (typeof price === "number" && price > 0) ? price : await getHLBestAsk("UETH/USDC");
+
+    // 3) 슬리피지/한도
+    const slipBps = Number(process.env.NEXT_PUBLIC_HL_SLIPPAGE_BPS ?? 10); // 기본 0.10%
+    const maxUsd   = Number(process.env.NEXT_PUBLIC_MAX_SWAP_USD ?? 100);
+
+    const amtUsd = Number(buyAmt);
+    if (!isFinite(amtUsd) || amtUsd <= 0) throw new Error("Invalid buy amount");
+    if (amtUsd > maxUsd) throw new Error(`주문 금액이 한도(${maxUsd} USD)를 초과합니다`);
+
+    // 4) limitPx, 사이즈 계산(1e8)
+    const limitPxUsd = spotPrice * (1 + slipBps / 10_000);
+    const sizeEth    = amtUsd / spotPrice;
+
+    const limitPx_1e8 = to1e8(limitPxUsd);
+    const sz_1e8      = to1e8(sizeEth);
+
+    // 5) 액션 바이트 생성 (IOC=3)
+    const data = buildLimitOrderData({
+      asset,
+      isBuy: true,
+      limitPx_1e8,
+      sz_1e8,
+      tif: 3,
+    });
+
+    // 6) 내 지갑(EOA) → CoreWriter 호출
+    await writeContractAsync({
+      address: CORE_WRITER as Address,
+      abi: CORE_WRITER_ABI,
+      functionName: "sendRawAction",
+      args: [data],
+      chainId: hyperEvm.id,
+    });
+
+    alert("IOC BUY 전송 완료 (체결 여부는 Hyperliquid 측 상태에 따름)");
+  } finally {
+    setLoading(false);
   }
+}
+
 
   const action =
+  
     exchangeKey === "oneinch"
       ? <button className="btn btn-primary w-full mt-3" onClick={handleBuyOn1inch} disabled={loading}>매수하기 (1inch)</button>
       : exchangeKey === "hyperliquid"

@@ -56,35 +56,48 @@ export async function GET() {
           .catch(() => null),
 
         // 1inch — 키가 있으면 우선 price API 사용, 실패 시 quote로 폴백
+        // 1inch — 키가 있으면 우선 price API 사용, 실패 시 quote로 폴백
         (async () => {
           if (!oneInchKey) return null;
+
           // 1) price API (간단)
           try {
             const { data } = await http.get(
-              "https://api.1inch.dev/price/v1.1/1/ETH",
+              "https://api.1inch.dev/price/v1.1/1/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
               { headers: { Authorization: `Bearer ${oneInchKey}` } }
             );
             return asNum(data?.price);
-          } catch {
-            // 2) quote API 폴백 (USDC→ETH, 100 USDC 기준 내재 가격)
-            try {
-              const params = {
-                src: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
-                dst: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // ETH
-                amount: String(100 * 1e6),
-              };
-              const { data } = await http.get(
-                "https://api.1inch.dev/swap/v6.0/1/quote",
-                { headers: { Authorization: `Bearer ${oneInchKey}` }, params }
-              );
-              const toDecimals = data?.toToken?.decimals ?? 18;
-              const toAmount = Number(data?.toAmount) / 10 ** toDecimals;
-              return toAmount ? 100 / toAmount : null;
-            } catch {
-              return null;
-            }
+          } catch (err: any) {
+            console.error(
+              "1inch price API error:",
+              err.response?.data || err.message
+            );
+            // throw err;  // 테스트 중엔 던져서 확인 가능, 운영에선 주석 처리 권장
           }
-        })(),
+
+          // 2) quote API 폴백 (USDC→ETH, 100 USDC 기준 내재 가격)
+          try {
+            const params = {
+              src: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+              dst: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // ETH
+              amount: String(100 * 1e6),
+            };
+            const { data } = await http.get(
+              "https://api.1inch.dev/swap/v6.0/1/quote",
+              { headers: { Authorization: `Bearer ${oneInchKey}` }, params }
+            );
+            const toDecimals = data?.toToken?.decimals ?? 18;
+            const toAmount = Number(data?.toAmount) / 10 ** toDecimals;
+            return toAmount ? 100 / toAmount : null;
+          } catch (err: any) {
+            console.error(
+              "1inch quote API error:",
+              err.response?.data || err.message
+            );
+            return null;
+          }
+      })(),
+
 
         // 🔥 Hyperliquid — UETH spot (정식 로직: tokenDetails → spotMetaAndAssetCtxs 폴백)
         (async () => {
