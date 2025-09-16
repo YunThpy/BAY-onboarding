@@ -91,3 +91,17 @@ NEXT_PUBLIC_HL_BUYER_CONTRACT=0x0000000000000000000000000000000000000000
 
 
 로 둬도 앱은 뜨지만, Hyperliquid 매수 버튼은 작동 안 함
+
+## 🔑 Reown (Web3Modal AppKit) Project ID 설정
+
+AppKit(Web3Modal)을 사용하려면 **Reown Cloud**에서 발급받은 `Project ID`가 필요합니다.  
+임의 문자열을 넣으면 403 Forbidden 에러가 발생하므로 반드시 정식 발급 절차를 거쳐야 합니다.
+
+### 발급 절차
+1. [Reown Cloud](https://cloud.reown.com) 접속 및 로그인 (GitHub, Google, Email 계정 지원)
+2. **Create Project** 클릭 → 프로젝트 이름/설명 입력
+3. 생성된 프로젝트 상세 페이지에서 **Project ID** 확인
+   - 32자리 랜덤 해시 문자열 형태 (예: `2f91d3e8c2c74c9a9f9b2ef9a8c...`)
+4. 로컬 환경 변수 파일에 추가:
+   ```env
+   NEXT_PUBLIC_PROJECT_ID=여기에_발급받은_ProjectID
