@@ -45,9 +45,11 @@ export const to1e8 = (v: number) => BigInt(Math.round(v * 1e8));
 /** ====== Info helpers ====== **/
 
 // UETH/USDC 페어의 asset id = 10000 + pair.index
+// lib/hyperliquid.ts 중 getHLSpotAssetId만 교체
 export async function getHLSpotAssetId(pair: string = "UETH/USDC"): Promise<number> {
   const url = pickHLInfoUrl();
   const canonP = canonPair(pair);
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -56,17 +58,40 @@ export async function getHLSpotAssetId(pair: string = "UETH/USDC"): Promise<numb
   const data = await res.json();
 
   const tokens = data?.tokens as { name: string; index: number }[] | undefined;
-  const universe = data?.universe as number[][] | undefined;
+  const universe = data?.universe as any[] | undefined;
   if (!tokens || !universe) throw new Error("Invalid spotMeta");
 
-  const [base, quote] = canonP.split("/");
-  const baseIdx = tokens.find((t) => t.name === base)?.index;
-  const quoteIdx = tokens.find((t) => t.name === quote)?.index;
-  if (baseIdx == null || quoteIdx == null) throw new Error("Token not found");
-  const pairIndex = universe.findIndex((p) => p[0] === baseIdx && p[1] === quoteIdx);
-  if (pairIndex < 0) throw new Error("Pair not found");
+  const [baseName, quoteName] = canonP.split("/");
+  const baseIdx = tokens.find((t) => t.name === baseName)?.index;
+  const quoteIdx = tokens.find((t) => t.name === quoteName)?.index;
+  if (baseIdx == null || quoteIdx == null) {
+    throw new Error(`Token not found: ${baseName}/${quoteName}`);
+  }
+
+  // universe 원소가 number[] 또는 { tokens: number[], index?: number } 둘 다 처리
+  let pairIndex = -1;
+  for (let i = 0; i < universe.length; i++) {
+    const u = universe[i];
+    const arr: number[] | null = Array.isArray(u)
+      ? (u as number[])
+      : Array.isArray(u?.tokens)
+      ? (u.tokens as number[])
+      : null;
+    if (!arr) continue;
+
+    // 순서 무시: 두 토큰을 모두 포함하면 매치
+    if (arr.includes(baseIdx) && arr.includes(quoteIdx)) {
+      pairIndex = typeof u?.index === "number" ? u.index : i;
+      break;
+    }
+  }
+
+  if (pairIndex < 0) {
+    throw new Error(`Pair not found: ${baseName}/${quoteName}`);
+  }
   return 10000 + pairIndex;
 }
+
 
 // 현물 호가창 베스트 매도호가(ask) 가져오기
 export async function getHLBestAsk(pair: string = "UETH/USDC"): Promise<number> {
